@@ -1,0 +1,1271 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>UI Window – Ticket Escalation & Crisis Flow</title>
+  <style>
+    :root{
+      --bg:#f6f7fb;
+      --text:#0f172a;
+      --muted:#475569;
+
+      --yes:#16a34a;
+      --no:#2563eb;
+      --warn:#d97706;
+      --danger:#dc2626;
+      --brand:#4f46e5;
+
+      --shadow: 0 18px 45px rgba(2,6,23,.10);
+      --radius:18px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background:
+        radial-gradient(1100px 700px at 15% 0%, rgba(79,70,229,.10) 0%, rgba(246,247,251,0) 55%),
+        radial-gradient(1100px 700px at 85% 0%, rgba(22,163,74,.10) 0%, rgba(246,247,251,0) 55%),
+        radial-gradient(1200px 800px at 50% 100%, rgba(217,119,6,.08) 0%, rgba(246,247,251,0) 60%),
+        var(--bg);
+      min-height:100vh;
+      padding:26px 16px 54px;
+    }
+    .container{ max-width:1100px; margin:0 auto; }
+
+    .btn{
+      appearance:none;
+      border:1px solid rgba(2,6,23,.14);
+      background: rgba(255,255,255,.92);
+      color: var(--text);
+      padding:10px 12px;
+      border-radius:999px;
+      font-weight:800;
+      font-size:12px;
+      cursor:pointer;
+      transition: transform .08s ease, background .15s ease, border-color .15s ease;
+      user-select:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      box-shadow: 0 10px 25px rgba(2,6,23,.06);
+    }
+    .btn:hover{ background: #ffffff; border-color: rgba(2,6,23,.22); }
+    .btn:active{ transform: scale(.98); }
+    .btn:disabled{ opacity:.45; cursor:not-allowed; box-shadow:none; }
+
+    .btn-yes{ border-color: rgba(22,163,74,.35); }
+    .btn-no{ border-color: rgba(37,99,235,.35); }
+    .btn-next{ border-color: rgba(217,119,6,.35); }
+    .btn-primary{ border-color: rgba(79,70,229,.35); }
+    .btn-reset{ border-color: rgba(2,6,23,.14); }
+
+    /* Launcher */
+    .launcher{
+      display:flex;
+      justify-content:center;
+      margin-top:40px;
+    }
+
+    /* UI Window */
+    .windowOverlay{
+      position:fixed; inset:0;
+      background: rgba(2,6,23,.55);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+      z-index:100;
+    }
+    .windowOverlay.show{ display:flex; }
+
+    .window{
+      width:min(1100px, 100%);
+      max-height:min(92vh, 980px);
+      border-radius: 22px;
+      background: rgba(255,255,255,.96);
+      border: 1px solid rgba(2,6,23,.16);
+      box-shadow: 0 40px 120px rgba(2,6,23,.30);
+      overflow:hidden;
+      display:flex;
+      flex-direction:column;
+    }
+    .windowHeader{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:12px 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.92));
+      border-bottom:1px solid rgba(2,6,23,.10);
+    }
+    .windowTitle{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      font-weight:950;
+      letter-spacing:.2px;
+      font-size:13px;
+    }
+    .mark{
+      width:30px;height:30px;border-radius:12px;
+      background:linear-gradient(135deg, rgba(79,70,229,.95), rgba(34,197,94,.80));
+      box-shadow: 0 10px 25px rgba(79,70,229,.18);
+      display:grid;place-items:center;
+      font-family:var(--mono);
+      font-weight:900;
+      color:white;
+      flex:0 0 auto;
+    }
+    .windowBody{
+      padding:14px;
+      overflow:auto;
+    }
+
+    /* Layout inside window */
+    .topbar{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:14px;
+      flex-wrap:wrap;
+      margin-bottom:16px;
+    }
+    .brandWrap{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      max-width:780px;
+    }
+    .brandWrap h1{
+      margin:0;
+      font-size:18px;
+      letter-spacing:.2px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .subtitle{ color:var(--muted); font-size:13px; line-height:1.4; }
+
+    .controls{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      align-items:center;
+      justify-content:flex-end;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1fr 360px;
+      gap:14px;
+      align-items:start;
+    }
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .stage{
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.92));
+      border:1px solid rgba(2,6,23,.10);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      position:relative;
+    }
+    .stageInner{
+      position:relative;
+      padding:18px 18px 16px;
+    }
+
+    .stepRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-bottom:10px;
+    }
+    .stepChip{
+      display:inline-flex;
+      align-items:center;
+      gap:10px;
+      padding:7px 10px;
+      border-radius:999px;
+      border:1px solid rgba(2,6,23,.10);
+      background: rgba(248,250,252,.95);
+      color: rgba(2,6,23,.85);
+      font-family:var(--mono);
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .progress{
+      flex:1;
+      min-width:220px;
+      height:10px;
+      border-radius:999px;
+      background: rgba(2,6,23,.06);
+      border:1px solid rgba(2,6,23,.08);
+      overflow:hidden;
+    }
+    .progress > div{
+      height:100%;
+      width:0%;
+      background: linear-gradient(90deg, rgba(79,70,229,.95), rgba(22,163,74,.85));
+      border-radius:999px;
+      transition: width .25s ease;
+    }
+
+    .headline{
+      font-size:20px;
+      margin:10px 0 6px;
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    .desc{
+      margin:0;
+      color: var(--muted);
+      font-size:14px;
+      max-width: 900px;
+      line-height:1.45;
+    }
+
+    .options{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:14px;
+    }
+
+    .divider{
+      margin:14px 0;
+      height:1px;
+      background: linear-gradient(90deg, transparent, rgba(2,6,23,.14), transparent);
+    }
+
+    .actionWrap{
+      margin-top:2px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .actionTitle{
+      font-weight:950;
+      font-size:14px;
+      color: rgba(2,6,23,.82);
+      letter-spacing:.2px;
+    }
+    .actionCard{
+      border-radius: 18px;
+      border:2px solid rgba(2,6,23,.10);
+      background: linear-gradient(180deg, #ffffff, #fbfdff);
+      padding:14px 14px 12px;
+      position:relative;
+      overflow:hidden;
+    }
+    .actionBig{
+      font-size:20px;
+      font-weight:950;
+      line-height:1.20;
+      margin:0;
+    }
+    .actionSub{
+      margin:8px 0 0;
+      font-size:14px;
+      color: var(--muted);
+      line-height:1.45;
+    }
+
+    .infoBox{
+      margin-top:12px;
+      border-radius: 18px;
+      border:1px solid rgba(2,6,23,.10);
+      background: rgba(248,250,252,.85);
+      padding:12px;
+      position:relative;
+      overflow:hidden;
+    }
+    .infoBox::before{
+      content:"";
+      position:absolute;
+      left:0; top:0; bottom:0;
+      width:4px;
+      background: rgba(2,6,23,.18);
+    }
+    .tone-regular::before{ background: var(--no); }
+    .tone-high::before{ background: var(--warn); }
+    .tone-monitor::before{ background: var(--warn); }
+    .tone-ok::before{ background: var(--yes); }
+    .tone-crisis::before{ background: var(--danger); }
+
+    .infoTitle{
+      font-weight:900;
+      margin:0 0 6px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .tag{
+      font-family:var(--mono);
+      font-size:11px;
+      padding:3px 8px;
+      border-radius:999px;
+      border:1px solid rgba(2,6,23,.12);
+      background: rgba(255,255,255,.92);
+      color: rgba(2,6,23,.90);
+      white-space:nowrap;
+    }
+    .infoText{ margin:0; color: rgba(15,23,42,.92); font-size:13.5px; line-height:1.45; }
+
+    .side{
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.92);
+      border:1px solid rgba(2,6,23,.10);
+      box-shadow: 0 14px 35px rgba(2,6,23,.08);
+      overflow:hidden;
+    }
+    .sideInner{ padding:14px; }
+    .side h3{
+      margin:0 0 10px;
+      font-size:13px;
+      letter-spacing:.2px;
+      color: rgba(2,6,23,.90);
+    }
+
+    .crumbs{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+      margin-top:8px;
+    }
+    .crumb{
+      border:1px solid rgba(2,6,23,.10);
+      background: rgba(248,250,252,.95);
+      border-radius:14px;
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      position:relative;
+      overflow:hidden;
+    }
+    .crumb::before{
+      content:"";
+      position:absolute; left:0; top:0; bottom:0;
+      width:4px;
+      background: rgba(2,6,23,.12);
+    }
+    .crumb .k{
+      font-size:11px;
+      color: var(--muted);
+      font-family:var(--mono);
+    }
+    .crumb .v{
+      font-size:12.5px;
+      color: rgba(2,6,23,.95);
+      font-weight:850;
+      line-height:1.25;
+    }
+    .crumb.yes::before{ background: var(--yes); }
+    .crumb.no::before{ background: var(--no); }
+
+    .small{
+      color: var(--muted);
+      font-size:12px;
+      margin-top:10px;
+      line-height:1.35;
+    }
+
+    /* Team modal */
+    .overlay{
+      position:fixed; inset:0;
+      background: rgba(2,6,23,.45);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      padding:16px;
+      z-index:200;
+    }
+    .overlay.show{ display:flex; }
+    .modal{
+      width:min(760px, 100%);
+      border-radius: 18px;
+      background: #ffffff;
+      border:1px solid rgba(2,6,23,.14);
+      box-shadow: 0 30px 90px rgba(2,6,23,.24);
+      overflow:hidden;
+    }
+    .modalInner{ padding:16px; }
+    .modalHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .modalTitle{
+      margin:0;
+      font-size:15px;
+      font-weight:950;
+    }
+    .modalSub{ margin:6px 0 0; color:var(--muted); font-size:13px; line-height:1.4; }
+    .modalActions{ display:flex; gap:10px; flex-wrap:wrap; justify-content:flex-end; }
+
+    .teamGrid{
+      display:grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap:10px;
+      margin-top:10px;
+    }
+    @media (max-width: 560px){
+      .teamGrid{ grid-template-columns: 1fr; }
+    }
+    .teamCard{
+      border-radius:16px;
+      border:1px solid rgba(2,6,23,.12);
+      background: rgba(248,250,252,.95);
+      padding:12px;
+      cursor:pointer;
+      transition: transform .08s ease, background .15s ease, border-color .15s ease;
+      user-select:none;
+      position:relative;
+      overflow:hidden;
+    }
+    .teamCard:hover{ background: #ffffff; border-color: rgba(2,6,23,.18); }
+    .teamCard:active{ transform: scale(.99); }
+    .teamCard .t{
+      font-weight:950;
+      margin:0 0 6px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+    .teamCard .meta{
+      color:var(--muted);
+      font-size:12.5px;
+      line-height:1.35;
+      margin:0;
+    }
+    .kbd{
+      font-family:var(--mono);
+      font-size:11px;
+      padding:3px 8px;
+      border:1px solid rgba(2,6,23,.12);
+      border-radius:999px;
+      background: rgba(255,255,255,.92);
+      color: rgba(2,6,23,.90);
+      white-space:nowrap;
+    }
+
+    /* Inputs (incident step) */
+    .field{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      margin-top:10px;
+    }
+    .label{
+      font-weight:900;
+      font-size:12px;
+      color: rgba(2,6,23,.85);
+    }
+    .textarea{
+      width:100%;
+      min-height:92px;
+      resize:vertical;
+      padding:10px 12px;
+      border-radius:14px;
+      border:1px solid rgba(2,6,23,.14);
+      background: rgba(255,255,255,.92);
+      font-family: var(--sans);
+      font-size:13px;
+      line-height:1.4;
+      outline:none;
+    }
+    .textarea:focus{
+      border-color: rgba(79,70,229,.40);
+      box-shadow: 0 0 0 4px rgba(79,70,229,.12);
+    }
+
+    /* Toast */
+    .toast{
+      position:fixed;
+      left:50%;
+      bottom:18px;
+      transform:translateX(-50%);
+      background: rgba(255,255,255,.96);
+      border:1px solid rgba(2,6,23,.14);
+      box-shadow: 0 14px 40px rgba(2,6,23,.16);
+      color: var(--text);
+      padding:10px 12px;
+      border-radius: 999px;
+      font-size:12.5px;
+      display:none;
+      align-items:center;
+      gap:8px;
+      z-index:300;
+    }
+    .toast.show{ display:flex; }
+    .toast .dot{
+      width:10px; height:10px; border-radius:999px;
+      background: rgba(2,6,23,.25);
+    }
+    .toast.ok .dot{ background: var(--yes); }
+    .toast.warn .dot{ background: var(--warn); }
+    .toast.err .dot{ background: var(--danger); }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="launcher">
+      <button class="btn btn-primary" id="openWindowBtn" type="button">Open escalation flow window</button>
+    </div>
+  </div>
+
+  <div class="windowOverlay" id="windowOverlay" role="dialog" aria-modal="true" aria-label="Ticket escalation flow window">
+    <div class="window">
+      <div class="windowHeader">
+        <div class="windowTitle">
+          <span class="mark">DT</span>
+          Ticket Escalation & Crisis Decision Flow
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn" id="closeWindowBtn" type="button">Close ✕</button>
+        </div>
+      </div>
+
+      <div class="windowBody">
+        <div class="topbar">
+          <div class="brandWrap">
+            <h1><span class="mark">DT</span> Ticket Escalation & Crisis Decision Flow</h1>
+            <div class="subtitle">
+              Presentation mode: one card at a time with <b>Back</b>/<b>Next</b>. Choose <b>Yes</b>/<b>No</b> to branch.
+              If you reach on-call routing, select a team and optionally choose a team member.
+            </div>
+          </div>
+
+          <div class="controls">
+            <button class="btn" id="backBtn" type="button" disabled>← Back</button>
+            <button class="btn btn-next" id="nextBtn" type="button" disabled>Next →</button>
+            <button class="btn btn-reset" id="resetBtn" type="button">Reset</button>
+            <button class="btn btn-primary" id="copyBtn" type="button">Copy summary</button>
+          </div>
+        </div>
+
+        <div class="grid">
+          <div class="stage">
+            <div class="stageInner">
+              <div class="stepRow">
+                <div class="stepChip" id="stepChip">Step 1 of 9</div>
+                <div class="progress" aria-label="Progress">
+                  <div id="progressBar"></div>
+                </div>
+              </div>
+
+              <div class="headline" id="headline">Start</div>
+              <p class="desc" id="desc">Support receives incoming tickets.</p>
+
+              <div class="options" id="options"></div>
+
+              <div class="divider"></div>
+
+              <div class="actionWrap">
+                <div class="actionTitle">Action required now</div>
+                <div class="actionCard">
+                  <div class="actionCardInner">
+                    <p class="actionBig" id="actionBig">Click Next to begin</p>
+                    <p class="actionSub" id="actionSub">Each step will ask a question. Choose Yes/No to proceed.</p>
+                  </div>
+                </div>
+              </div>
+
+              <div id="resultArea"></div>
+            </div>
+          </div>
+
+          <aside class="side">
+            <div class="sideInner">
+              <h3>Chosen path</h3>
+              <div class="crumbs" id="crumbs"></div>
+              <div class="small">
+                Tip: Use Back to adjust answers and demonstrate multiple scenarios.
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Team picker modal -->
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-label="Select team">
+    <div class="modal">
+      <div class="modalInner">
+        <div class="modalHead">
+          <div>
+            <h2 class="modalTitle">Select the on-call team</h2>
+            <p class="modalSub">Pick a team. (No direct team link button is shown in the main flow.)</p>
+          </div>
+          <div class="modalActions">
+            <button class="btn btn-reset" id="closeModalBtn" type="button">Close</button>
+          </div>
+        </div>
+        <div class="teamGrid" id="teamGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"><span class="dot"></span><span id="toastText">Copied</span></div>
+
+  <script>
+    // --- UI Window open/close ---
+    const windowOverlay = document.getElementById("windowOverlay");
+    const openWindowBtn = document.getElementById("openWindowBtn");
+    const closeWindowBtn = document.getElementById("closeWindowBtn");
+
+    function openWindow(){
+      windowOverlay.classList.add("show");
+      closeWindowBtn.focus();
+    }
+    function closeWindow(){
+      windowOverlay.classList.remove("show");
+      openWindowBtn.focus();
+    }
+    openWindowBtn.addEventListener("click", openWindow);
+    closeWindowBtn.addEventListener("click", closeWindow);
+    windowOverlay.addEventListener("click", function(e){
+      if(e.target === windowOverlay) closeWindow();
+    });
+
+    // CONFIG: Team members (from your table)
+    const teamMembers = {
+      "DevOps": ["Ehab","Dariel","Adam","Alex","Ofer"],
+      "Algo": ["Moshiko","Jordan"],
+      "PME": ["Valerie","Denis","Helen"],
+      "Solution": ["Asaf","Nevo","Sagi","Dor","Amber"],
+      "Cloud": ["Aviel","Tomer","Sergey","Aviv"],
+      "Application": ["Dor","Minh","Duy"],
+      "Order Gateway": ["Yael"]
+    };
+
+    // Steps (added incident_details before end_full)
+    const steps = [
+      { id:"start", title:"Start", desc:"Support receives incoming tickets.", type:"info", next:"g1" },
+      {
+        id:"g1",
+        title:"More than 2 tickets received?",
+        desc:"Gate 1 — detects bursts beyond normal volume.",
+        type:"choice",
+        choices:[
+          { key:"yes", label:"Yes", next:"g2" },
+          { key:"no",  label:"No",  next:"end_regular_g1" }
+        ]
+      },
+      {
+        id:"g2",
+        title:"Tickets related to the same issue and same market within 30 minutes?",
+        desc:"Gate 2 — confirms clustering by issue + market + time window.",
+        type:"choice",
+        choices:[
+          { key:"yes", label:"Yes", next:"impact" },
+          { key:"no",  label:"No",  next:"end_regular_g2" }
+        ]
+      },
+      {
+        id:"impact",
+        title:"Does the issue impact store operations?",
+        desc:"If stores are affected → escalate to CSM; otherwise handle as high-priority support.",
+        type:"choice",
+        choices:[
+          { key:"yes", label:"Yes", next:"csm_assess" },
+          { key:"no",  label:"No",  next:"end_high_priority" }
+        ]
+      },
+      {
+        id:"csm_assess",
+        title:"CSM Assessment",
+        desc:"CSM evaluates: ticket type, number of tickets, and market sensitivity.",
+        type:"info",
+        next:"crisis"
+      },
+      {
+        id:"crisis",
+        title:"Does the CSM define this as a Crisis?",
+        desc:"If Crisis → activate on-call Solution Engineer; otherwise monitor as non-crisis escalation.",
+        type:"choice",
+        choices:[
+          { key:"yes", label:"Yes", next:"se_routing" },
+          { key:"no",  label:"No",  next:"end_monitor" }
+        ]
+      },
+      {
+        id:"se_routing",
+        title:"On-call Routing (Solution Engineer)",
+        desc:"Route the issue and engage the relevant on-call engineer/team. Support provides logs and customer communication.",
+        type:"teams",
+        teams:["DevOps","Cloud","Algo","Application","PME","Order Gateway","Solution"],
+        next:"comms"
+      },
+      {
+        id:"comms",
+        title:"Communication & Updates",
+        desc:"Ongoing updates to Customer Success and updates shared in the WhatsApp group.",
+        type:"info",
+        next:"incident_details"
+      },
+      {
+        id:"incident_details",
+        title:"Incident details (for handoff)",
+        desc:"Add a short incident description and paste ticket URL(s).",
+        type:"incident",
+        next:"end_full"
+      },
+
+      { id:"end_regular_g1", title:"Outcome: Regular Support", desc:"No burst detected — handle as regular support cases.", type:"end", resultTone:"regular" },
+      { id:"end_regular_g2", title:"Outcome: Regular Support", desc:"Not a correlated cluster — handle as regular support cases.", type:"end", resultTone:"regular" },
+      { id:"end_high_priority", title:"Outcome: High-Priority Support", desc:"Operational impact = No → handle as a high-priority support case.", type:"end", resultTone:"high" },
+      { id:"end_monitor", title:"Outcome: Non-crisis escalation", desc:"CSM keeps ownership; monitor and manage without on-call activation.", type:"end", resultTone:"monitor" },
+      { id:"end_full", title:"End", desc:"Flow complete: burst triage → escalation → crisis routing → updates → incident details.", type:"end", resultTone:"ok" }
+    ];
+
+    const byId = {};
+    for(let i=0;i<steps.length;i++){ byId[steps[i].id] = steps[i]; }
+
+    const mainline = ["start","g1","g2","impact","csm_assess","crisis","se_routing","comms","incident_details"];
+
+    const state = {
+      history: [],
+      current: "start",
+      answers: {},
+      team: null,
+      member: null,
+      incident: { desc:"", urls:"" }
+    };
+
+    const $ = function(id){ return document.getElementById(id); };
+    const headline = $("headline");
+    const desc = $("desc");
+    const options = $("options");
+    const resultArea = $("resultArea");
+    const crumbs = $("crumbs");
+    const stepChip = $("stepChip");
+    const progressBar = $("progressBar");
+    const backBtn = $("backBtn");
+    const nextBtn = $("nextBtn");
+    const resetBtn = $("resetBtn");
+    const copyBtn = $("copyBtn");
+    const overlay = $("overlay");
+    const closeModalBtn = $("closeModalBtn");
+    const teamGrid = $("teamGrid");
+    const toast = $("toast");
+    const toastText = $("toastText");
+    const actionBig = $("actionBig");
+    const actionSub = $("actionSub");
+
+    function toastMsg(text, kind){
+      if(!kind) kind = "ok";
+      toastText.textContent = text;
+      toast.classList.remove("ok","warn","err");
+      toast.classList.add("show", kind);
+      clearTimeout(toast._t);
+      toast._t = setTimeout(function(){ toast.classList.remove("show"); }, 1100);
+    }
+
+    function clearNode(node){
+      while(node.firstChild) node.removeChild(node.firstChild);
+    }
+
+    function makeBtn(label, cls, onClick){
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn " + cls;
+      b.textContent = label;
+      b.addEventListener("click", onClick);
+      return b;
+    }
+
+    function escapeHtml(str){
+      return String(str)
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;")
+        .replaceAll("'","&#039;");
+    }
+
+    function setAction(big, sub){
+      actionBig.textContent = big;
+      actionSub.textContent = sub || "";
+    }
+
+    function getMainIndex(stepId){
+      const i = mainline.indexOf(stepId);
+      return i >= 0 ? i : null;
+    }
+
+    function renderProgress(){
+      const idx = getMainIndex(state.current);
+      const total = mainline.length;
+      const n = (idx === null) ? total : (idx + 1);
+      stepChip.textContent = "Step " + Math.min(n,total) + " of " + total;
+      const pct = Math.round((Math.min(n,total) / total) * 100);
+      progressBar.style.width = pct + "%";
+    }
+
+    function computeNextId(){
+      const step = byId[state.current];
+      if(!step) return null;
+
+      if(step.type === "info") return step.next || null;
+
+      if(step.type === "choice"){
+        const a = state.answers[step.id];
+        if(!a) return null;
+        const choices = step.choices || [];
+        for(let i=0;i<choices.length;i++){
+          if(choices[i].key === a) return choices[i].next;
+        }
+        return null;
+      }
+
+      if(step.type === "teams"){
+        if(!state.team) return null;
+        return step.next || null;
+      }
+
+      if(step.type === "incident"){
+        return step.next || null;
+      }
+
+      return null;
+    }
+
+    function updateNavButtons(){
+      backBtn.disabled = state.history.length === 0;
+      const step = byId[state.current];
+      const nextId = computeNextId();
+      nextBtn.disabled = !nextId || (step && step.type === "end");
+    }
+
+    function renderCrumbs(){
+      clearNode(crumbs);
+
+      const seq = state.history.slice();
+      seq.push(state.current);
+
+      const items = [];
+
+      for(let i=0;i<seq.length;i++){
+        const sid = seq[i];
+        const step = byId[sid];
+        if(!step) continue;
+
+        if(step.type === "choice" && state.answers[sid]){
+          const v = state.answers[sid];
+          items.push({ k: step.title, v: String(v).toUpperCase(), kind: v });
+        }
+
+        if(step.type === "teams" && state.team){
+          items.push({ k: "Team selected", v: state.team, kind: "yes" });
+          if(state.member){
+            items.push({ k: "Team member", v: state.member, kind: "yes" });
+          }
+        }
+
+        if(step.type === "incident"){
+          if(state.incident.desc){
+            items.push({ k: "Incident description", v: state.incident.desc.length > 40 ? (state.incident.desc.slice(0,40) + "…") : state.incident.desc, kind: "yes" });
+          }
+          if(state.incident.urls){
+            items.push({ k: "Ticket URL(s)", v: state.incident.urls.length > 40 ? (state.incident.urls.slice(0,40) + "…") : state.incident.urls, kind: "yes" });
+          }
+        }
+      }
+
+      if(items.length === 0){
+        const empty = document.createElement("div");
+        empty.className = "small";
+        empty.textContent = "No decisions yet. Click Next to begin.";
+        crumbs.appendChild(empty);
+        return;
+      }
+
+      for(let i=0;i<items.length;i++){
+        const it = items[i];
+        const c = document.createElement("div");
+        c.className = "crumb " + (it.kind === "no" ? "no" : "yes");
+        c.innerHTML = '<div class="k">' + escapeHtml(it.k) + '</div><div class="v">' + escapeHtml(it.v) + '</div>';
+        crumbs.appendChild(c);
+      }
+    }
+
+    function pruneFutureFrom(stepId){
+      const idx = mainline.indexOf(stepId);
+      if(idx === -1) return;
+
+      const downstream = {};
+      const tail = mainline.slice(idx+1);
+      for(let i=0;i<tail.length;i++) downstream[tail[i]] = true;
+
+      const keys = Object.keys(state.answers);
+      for(let i=0;i<keys.length;i++){
+        if(downstream[keys[i]]) delete state.answers[keys[i]];
+      }
+
+      if(downstream["se_routing"]){
+        state.team = null;
+        state.member = null;
+      }
+      if(downstream["incident_details"]){
+        state.incident.desc = "";
+        state.incident.urls = "";
+      }
+    }
+
+    function openModal(){ overlay.classList.add("show"); }
+    function closeModal(){ overlay.classList.remove("show"); }
+
+    function renderTeams(){
+      clearNode(teamGrid);
+      const teams = byId["se_routing"].teams || [];
+      for(let i=0;i<teams.length;i++){
+        const t = teams[i];
+        const card = document.createElement("div");
+        card.className = "teamCard";
+        card.tabIndex = 0;
+
+        card.innerHTML =
+          '<div class="t"><span>' + escapeHtml(t) + '</span><span class="kbd">' +
+          (state.team === t ? "Selected" : "Pick") +
+          '</span></div>' +
+          '<p class="meta">Select this team.</p>';
+
+        card.addEventListener("click", function(){
+          state.team = t;
+          state.member = null;
+          closeModal();
+          renderTeams();
+          render();
+          toastMsg("Selected " + t, "ok");
+        });
+
+        card.addEventListener("keydown", function(e){
+          if(e.key === "Enter" || e.key === " "){
+            e.preventDefault();
+            card.click();
+          }
+        });
+
+        teamGrid.appendChild(card);
+      }
+    }
+
+    function infoBox(title, text, tone, cta){
+      if(!tone) tone = "ok";
+      const wrap = document.createElement("div");
+      wrap.className = "infoBox tone-" + tone;
+
+      wrap.innerHTML =
+        '<div class="infoTitle"><span>' + escapeHtml(title) + '</span><span class="tag">' + tone.toUpperCase() + '</span></div>' +
+        '<p class="infoText">' + escapeHtml(text) + '</p>' +
+        '<div class="options" style="margin-top:10px; gap:10px; display:' + (cta ? "flex" : "none") + ';"></div>';
+
+      if(cta){
+        const row = wrap.querySelector(".options");
+        row.appendChild(makeBtn(cta.label, "btn-next", cta.onClick));
+      }
+
+      return wrap;
+    }
+
+    function renderMemberDropdown(){
+      const members = teamMembers[state.team] || [];
+      const memberBox = document.createElement("div");
+      memberBox.className = "infoBox tone-ok";
+      memberBox.innerHTML =
+        '<div class="infoTitle"><span>On-call contact (optional)</span><span class="tag">SELECT</span></div>' +
+        '<p class="infoText">Pick a person from the selected team.</p>' +
+        '<div class="options" style="margin-top:10px; gap:10px; display:flex; align-items:center; flex-wrap:wrap;"></div>';
+
+      const row = memberBox.querySelector(".options");
+      const sel = document.createElement("select");
+      sel.style.padding = "10px 12px";
+      sel.style.borderRadius = "999px";
+      sel.style.border = "1px solid rgba(2,6,23,.14)";
+      sel.style.background = "rgba(255,255,255,.92)";
+      sel.style.fontWeight = "800";
+      sel.style.fontSize = "12px";
+
+      const opt0 = document.createElement("option");
+      opt0.value = "";
+      opt0.textContent = "Select team member…";
+      sel.appendChild(opt0);
+
+      for(let i=0;i<members.length;i++){
+        const m = members[i];
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = m;
+        if(state.member === m) opt.selected = true;
+        sel.appendChild(opt);
+      }
+
+      sel.addEventListener("change", function(){
+        state.member = sel.value || null;
+        toastMsg(state.member ? ("Selected " + state.member) : "Cleared selection", "ok");
+        renderCrumbs();
+      });
+
+      row.appendChild(sel);
+      return memberBox;
+    }
+
+    function renderIncidentInputs(){
+      const box = document.createElement("div");
+      box.className = "infoBox tone-ok";
+      box.innerHTML =
+        '<div class="infoTitle"><span>Incident details</span><span class="tag">HANDOFF</span></div>' +
+        '<p class="infoText">Add a short description and paste ticket URL(s). You can paste multiple URLs, one per line.</p>';
+
+      const field1 = document.createElement("div");
+      field1.className = "field";
+      field1.innerHTML = '<div class="label">Event description</div>';
+      const ta1 = document.createElement("textarea");
+      ta1.className = "textarea";
+      ta1.placeholder = "Example: Burst of order failures in IL market after deployment X…";
+      ta1.value = state.incident.desc || "";
+      ta1.addEventListener("input", function(){
+        state.incident.desc = ta1.value;
+        renderCrumbs();
+      });
+      field1.appendChild(ta1);
+
+      const field2 = document.createElement("div");
+      field2.className = "field";
+      field2.innerHTML = '<div class="label">Ticket URL(s)</div>';
+      const ta2 = document.createElement("textarea");
+      ta2.className = "textarea";
+      ta2.placeholder = "Paste URLs here (one per line)\nhttps://...\nhttps://...";
+      ta2.value = state.incident.urls || "";
+      ta2.addEventListener("input", function(){
+        state.incident.urls = ta2.value;
+        renderCrumbs();
+      });
+      field2.appendChild(ta2);
+
+      box.appendChild(field1);
+      box.appendChild(field2);
+
+      return box;
+    }
+
+    function render(){
+      const step = byId[state.current];
+      if(!step) return;
+
+      headline.textContent = step.title;
+      desc.textContent = step.desc;
+
+      clearNode(options);
+      clearNode(resultArea);
+
+      if(step.type === "info"){
+        setAction("Action: Click Next to continue", "This step is informational (no decision required).");
+        resultArea.appendChild(infoBox("Info", "Click Next to proceed.", "ok"));
+      }
+
+      if(step.type === "choice"){
+        setAction("Action: Select YES or NO", "Your choice will unlock Next and determine the path.");
+        resultArea.appendChild(infoBox("Decision", "Choose Yes or No to continue.", "ok"));
+
+        const choices = step.choices || [];
+        for(let i=0;i<choices.length;i++){
+          const c = choices[i];
+          const cls = (c.key === "yes") ? "btn-yes" : "btn-no";
+          const b = makeBtn(c.label, cls, function(){
+            state.answers[step.id] = c.key;
+            pruneFutureFrom(step.id);
+
+            render();
+
+            if(c.key === "no"){
+              if(step.id === "g1" || step.id === "g2"){
+                setAction("Action: Handle as regular support cases", "Burst/cluster criteria were not met.");
+                resultArea.appendChild(infoBox("NO path", "Handle as regular support cases.", "regular"));
+              } else if(step.id === "impact"){
+                setAction("Action: Handle as a high-priority support case", "No operational impact, but keep priority high.");
+                resultArea.appendChild(infoBox("NO path", "Handle as a high-priority support case.", "high"));
+              } else if(step.id === "crisis"){
+                setAction("Action: Monitor as non-crisis escalation", "CSM retains ownership; no on-call activation.");
+                resultArea.appendChild(infoBox("NO path", "Monitor and manage as non-crisis escalation.", "monitor"));
+              }
+            } else {
+              setAction("Action: Continue to the next step", "Click Next to proceed.");
+              resultArea.appendChild(infoBox("YES path", "Continue to the next step.", "ok"));
+            }
+
+            renderCrumbs();
+            updateNavButtons();
+          });
+
+          if(state.answers[step.id] === c.key){
+            b.style.outline = "2px solid rgba(79,70,229,.20)";
+          }
+          options.appendChild(b);
+        }
+      }
+
+      if(step.type === "teams"){
+        setAction("Action: Select a team, optionally choose a member, then click Next", "No separate team-link card is shown.");
+        options.appendChild(makeBtn(state.team ? ("Team: " + state.team + " (Change)") : "Choose team", "btn-primary", openModal));
+
+        resultArea.appendChild(infoBox("Routing", "Engage the relevant on-call engineer/team. Support provides logs and customer communication.", "crisis"));
+
+        if(state.team){
+          // Member dropdown only (no "Team selected" / no "Open team link")
+          resultArea.appendChild(renderMemberDropdown());
+        } else {
+          resultArea.appendChild(infoBox("Team required", "Select a team to enable Next.", "monitor"));
+        }
+      }
+
+      if(step.type === "incident"){
+        setAction("Action: Add incident info, then click Next", "This will be included in the summary for handoff.");
+        resultArea.appendChild(renderIncidentInputs());
+        resultArea.appendChild(infoBox("Tip", "Paste multiple ticket URLs (one per line).", "ok"));
+      }
+
+      if(step.type === "end"){
+        const tone = (step.resultTone === "regular") ? "regular" :
+                     (step.resultTone === "high") ? "high" :
+                     (step.resultTone === "monitor") ? "monitor" : "ok";
+        setAction("Action: Scenario complete", "Click Reset to run another scenario.");
+        resultArea.appendChild(infoBox(step.title, step.desc, tone));
+        resultArea.appendChild(infoBox("Tip", "Click Reset to demonstrate a different scenario.", "ok"));
+      }
+
+      renderCrumbs();
+      renderProgress();
+      updateNavButtons();
+    }
+
+    function goNext(){
+      const nextId = computeNextId();
+      if(!nextId) return;
+      state.history.push(state.current);
+      state.current = nextId;
+      render();
+    }
+
+    function goBack(){
+      if(state.history.length === 0) return;
+      state.current = state.history.pop();
+      render();
+    }
+
+    function reset(){
+      state.history = [];
+      state.current = "start";
+      state.answers = {};
+      state.team = null;
+      state.member = null;
+      state.incident.desc = "";
+      state.incident.urls = "";
+      renderTeams();
+      render();
+      toastMsg("Reset", "warn");
+    }
+
+    function summaryText(){
+      const parts = [];
+      parts.push("Ticket Escalation & Crisis Flow – Scenario Summary");
+      parts.push("--------------------------------------------------");
+
+      for(let i=0;i<mainline.length;i++){
+        const sid = mainline[i];
+        const step = byId[sid];
+        if(!step) continue;
+
+        if(step.type === "choice"){
+          const a = state.answers[sid];
+          if(a) parts.push(step.title + " -> " + String(a).toUpperCase());
+        }
+
+        if(step.type === "teams"){
+          if(state.team) parts.push("Selected team -> " + state.team);
+          if(state.member) parts.push("Selected member -> " + state.member);
+        }
+
+        if(step.type === "incident"){
+          if(state.incident.desc) parts.push("Incident description -> " + state.incident.desc);
+          if(state.incident.urls) parts.push("Ticket URL(s) ->\n" + state.incident.urls);
+        }
+      }
+
+      const cur = byId[state.current];
+      if(cur && cur.type === "end"){
+        parts.push("Outcome -> " + cur.title);
+        parts.push("Notes -> " + cur.desc);
+      } else {
+        const nid = computeNextId();
+        parts.push("Current step -> " + (cur ? cur.title : state.current));
+        parts.push("Next -> " + (nid && byId[nid] ? byId[nid].title : "N/A"));
+      }
+
+      return parts.join("\n");
+    }
+
+    async function copySummary(){
+      const text = summaryText();
+      try{
+        await navigator.clipboard.writeText(text);
+        toastMsg("Summary copied ✓", "ok");
+      }catch(e){
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        toastMsg("Summary copied ✓", "ok");
+      }
+    }
+
+    // Events
+    nextBtn.addEventListener("click", goNext);
+    backBtn.addEventListener("click", goBack);
+    resetBtn.addEventListener("click", reset);
+    copyBtn.addEventListener("click", copySummary);
+
+    closeModalBtn.addEventListener("click", closeModal);
+    overlay.addEventListener("click", function(e){
+      if(e.target === overlay) closeModal();
+    });
+
+    document.addEventListener("keydown", function(e){
+      if(e.key === "Escape"){
+        if(overlay.classList.contains("show")) closeModal();
+        else if(windowOverlay.classList.contains("show")) closeWindow();
+      }
+      if(!overlay.classList.contains("show")){
+        if((e.key === "ArrowRight" || e.key === "Enter") && !nextBtn.disabled){
+          const tag = (document.activeElement && document.activeElement.tagName) || "";
+          if(tag !== "BUTTON" && tag !== "TEXTAREA" && tag !== "SELECT") goNext();
+        }
+        if(e.key === "ArrowLeft" && !backBtn.disabled) goBack();
+      }
+    });
+
+    // Init
+    renderTeams();
+    render();
+  </script>
+</body>
+</html>
